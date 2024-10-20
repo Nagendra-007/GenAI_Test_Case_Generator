@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Case Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        label {
+            font-weight: bold;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        #loading {
+            display: none;
+            text-align: center;
+        }
+
+        #test-cases {
+            margin-top: 20px;
+        }
+
+        .test-case {
+            background-color: #f9f9f9;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .test-case h4 {
+            margin: 0 0 10px;
+        }
+
+        #generate-more-btn,
+        #previous-btn,
+        #download-btn {
+            display: none;
+            margin-top: 20px;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Test Case Generator</h1>
+
+        <label for="functionality">Enter Functionality:</label>
+        <input type="text" id="functionality" placeholder="e.g., User Login Feature" />
+
+        <button id="generate-btn">Generate Test Cases</button>
+        <button id="previous-btn">Show Previous</button>
+        <button id="download-btn">Download Test Cases</button>
+        <a href="/login" style="float: right; margin-right: 20px; padding: 10px 20px; background-color: #f44336; color: white; text-decoration: none; border-radius: 5px;">Logout</a>
+
+        <div id="loading">
+            <h4>Generating test cases... Please wait</h4>
+        </div>
+
+        <div id="test-cases"></div>
+
+        <button id="generate-more-btn">Generate More</button>
+    </div>
+
+    <script>
+        const generateBtn = document.getElementById('generate-btn');
+        const generateMoreBtn = document.getElementById('generate-more-btn');
+        const previousBtn = document.getElementById('previous-btn');
+        const downloadBtn = document.getElementById('download-btn');
+        const functionalityInput = document.getElementById('functionality');
+        const loadingIndicator = document.getElementById('loading');
+        const testCasesContainer = document.getElementById('test-cases');
+
+        let allTestCases = [];
+        let storedTestCases = [];
+        let testCaseCounter = 0;
+
+        // Helper function to render test cases on the webpage
+        function renderTestCases(testCases) {
+            testCasesContainer.innerHTML = ''; // Clear existing test cases from the view
+
+            testCases.forEach((testCase, index) => {
+                const testCaseDiv = document.createElement('div');
+                testCaseDiv.classList.add('test-case');
+                testCaseDiv.innerHTML = `
+                    <h4>Name : Test Case ${testCaseCounter + index + 1}</h4>
+                    <p><strong>Description:</strong> ${testCase.description}</p>
+                    <p><strong>Input:</strong> ${JSON.stringify(testCase.input)}</p>
+                    <p><strong>Expected Output:</strong> ${testCase.output}</p>
+                `;
+                testCasesContainer.appendChild(testCaseDiv);
+            });
+
+            testCaseCounter += testCases.length; // Update the test case counter
+            testCasesContainer.appendChild(generateMoreBtn); // Add "Generate More" button
+        }
+
+        // Function to handle API request to generate test cases
+        async function generateTestCases(url, functionality) {
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({ functionality })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    return data.test_cases || data.new_test_cases;
+                } else {
+                    alert(data.error || 'Error generating test cases');
+                    return [];
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred while generating test cases.');
+                return [];
+            }
+        }
+
+        // Event listener for generating the initial set of test cases
+        generateBtn.addEventListener('click', async () => {
+            const functionality = functionalityInput.value.trim();
+
+            if (!functionality) {
+                alert('Please enter a functionality.');
+                return;
+            }
+
+            loadingIndicator.style.display = 'block';
+            testCasesContainer.innerHTML = ''; // Clear previous test cases
+            testCaseCounter = 0; // Reset the counter for new functionality
+
+            // Generate test cases using the backend API
+            const testCases = await generateTestCases('/generate_test_cases', functionality);
+            
+            allTestCases = testCases;
+            storedTestCases = testCases; // Store all test cases for later use
+            loadingIndicator.style.display = 'none';
+
+            if (testCases.length > 0) {
+                renderTestCases(testCases);
+                generateMoreBtn.style.display = 'inline-block'; // Show 'Generate More' button
+                downloadBtn.style.display = 'inline-block'; // Show 'Download' button
+            } else {
+                alert('No test cases were generated.');
+            }
+        });
+
+        // Event listener for generating more test cases
+        generateMoreBtn.addEventListener('click', async () => {
+            const functionality = functionalityInput.value.trim();
+
+            if (!functionality) {
+                alert('Please enter a functionality.');
+                return;
+            }
+
+            // Hide previous test cases and show loading indicator
+            testCasesContainer.innerHTML = '';
+            loadingIndicator.style.display = 'block';
+
+            // Generate more test cases using the backend API
+            const moreTestCases = await generateTestCases('/generate_more_test_cases', functionality);
+            loadingIndicator.style.display = 'none';
+
+            if (moreTestCases.length > 0) {
+                allTestCases.push(...moreTestCases); // Store all generated test cases
+                renderTestCases(moreTestCases); // Only render the newly generated test cases
+            } else {
+                alert('No additional test cases were generated.');
+            }
+        });
+
+        // Event listener for showing previously generated test cases
+        previousBtn.addEventListener('click', () => {
+            renderTestCases(storedTestCases);
+        });
+
+        // Event listener for downloading test cases as Excel file
+        downloadBtn.addEventListener('click', async () => {
+            const response = await fetch('/download_test_cases');
+            if (response.ok) {
+                const blob = await response.blob();
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = 'test_cases.xlsx';
+                link.click();
+            } else {
+                alert('Error downloading test cases.');
+            }
+        });
+    </script>
+</body>
+</html>
